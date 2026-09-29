@@ -3,6 +3,7 @@ from typing import Type, cast
 from dotenv import load_dotenv
 
 from .agent import Agent, Playback
+from .arcagi_solver import ARCAGI3Solver
 from .recorder import Recorder
 from .swarm import Swarm
 from .templates.langgraph_functional_agent import LangGraphFunc, LangGraphTextOnly
@@ -16,20 +17,28 @@ from .templates.smolagents import SmolCodingAgent, SmolVisionAgent
 
 load_dotenv()
 
+
 AVAILABLE_AGENTS: dict[str, Type[Agent]] = {
     cls.__name__.lower(): cast(Type[Agent], cls)
     for cls in Agent.__subclasses__()
     if cls.__name__ != "Playback"
 }
 
-# add all the recording files as valid agent names
+# Add the custom ARC-AGI-3 solver.
+AVAILABLE_AGENTS["arcagi3solver"] = ARCAGI3Solver
+AVAILABLE_AGENTS["arcagi_solver"] = ARCAGI3Solver
+AVAILABLE_AGENTS["arcagisolver"] = ARCAGI3Solver
+
+# Add all recording files as valid agent names.
 for rec in Recorder.list():
     AVAILABLE_AGENTS[rec] = Playback
 
-# update the agent dictionary to include subclasses of LLM class
+# Add subclasses that aren't discovered directly through Agent.__subclasses__().
 AVAILABLE_AGENTS["reasoningagent"] = ReasoningAgent
 
+
 __all__ = [
+    "ARCAGI3Solver",
     "Swarm",
     "Random",
     "LangGraphFunc",
