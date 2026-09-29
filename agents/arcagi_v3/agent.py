@@ -16,7 +16,7 @@ from .memory import EpisodeMemory
 from .objects import GameObject, ObjectType
 from .perception import PerceptionEngine
 from .planner import Planner
-from .state import HUDState, PlayerState, WorldState
+from .state import HUDState, PlayerState, TransitionPhase, WorldState
 from .transitions import TransitionLearner
 from .world_model import WorldModel
 
@@ -84,6 +84,11 @@ class ARCAGIV3Solver(Agent):
         self.last_world_state: Optional[WorldState] = None
         self.last_action: Optional[GameAction] = None
 
+        # Transition synchronization tracking
+        self.transition_phase: TransitionPhase = TransitionPhase.NORMAL
+        self.last_completed_screen: Optional[np.ndarray] = None
+        self.last_completed_goal_pos: Optional[Tuple[int, int]] = None
+
         # V3.1: NO pre-seeded action lists! Plans are generated purely online.
         self.active_plan: Deque[GameAction] = deque()
         self.subgoal_queue: Deque[MissionSubGoal] = deque()
@@ -93,14 +98,19 @@ class ARCAGIV3Solver(Agent):
         self._init_level(0)
 
     def _init_level(self, level_idx: int) -> None:
-        """Initialize world model, goals, and mission subgoals for a specific level."""
+        """Initialize world model, goals, and mission subgoals for a specific level with 100% isolation."""
         self.current_level_idx = level_idx
         self.world_model.reset_level()
+        self.perception.reset_level()
+        self.transition_learner.reset_level()
         self.memory.clear()
+        self.planner.reset_level()
         self.active_plan.clear()
         self.active_subgoal = None
         self.last_world_state = None
         self.last_action = None
+        self.last_completed_screen = None
+        self.last_completed_goal_pos = None
 
         spec = get_level_spec(level_idx)
         if spec:
@@ -112,19 +122,56 @@ class ARCAGIV3Solver(Agent):
         else:
             self.subgoal_queue = deque()
 
+    def _verify_new_level_frame(
+        self, screen: Optional[np.ndarray], target_level_idx: int
+    ) -> bool:
+        """
+        Verify whether the current visual screen corresponds to the new level.
+        Returns False if the frame is still the stale completion frame of the prior level.
+        """
+        if screen is None:
+            return False
+
+        # If byte-for-byte identical to the completion screen of the prior level, it is stale
+        if (
+            self.last_completed_screen is not None
+            and not self.perception.screens_differ(screen, self.last_completed_screen)
+        ):
+            return False
+
+        # Detect player in the candidate frame
+        cand_player = self.perception.detect_player(screen)
+        if cand_player is not None:
+            # If player is still located at the completed goal cell, the frame is stale
+            if (
+                self.last_completed_goal_pos is not None
+                and cand_player.grid_pos == self.last_completed_goal_pos
+            ):
+                return False
+
+        return True
+
+    def _select_safe_fallback_action(self, player: PlayerState) -> GameAction:
+        """Select a safe passable neighboring action avoiding immediate wall collisions."""
+        recent = self.memory.history[-5:] if self.memory.history else []
+        recent_pos = [(s.col, s.row) for s in recent]
+        safe_action = self.planner.get_safe_recovery_action(player.grid_pos, recent_pos)
+        self.diagnostics.action(f"Controlled fallback recovery action: {safe_action.name}")
+        return safe_action
+
     # ------------------------------------------------------------------
     # Agent API Compliance
     # ------------------------------------------------------------------
 
     def is_done(self, frames: list[FrameData], latest_frame: FrameData) -> bool:
-        """Return True when game state is WIN."""
+        """Return True when game state is WIN or GAME_OVER."""
         if not frames:
             return False
         state = getattr(latest_frame, "state", None)
         if state is None:
             return False
         state_str = str(state).upper()
-        return "WIN" in state_str
+        return "WIN" in state_str or "GAME_OVER" in state_str
 
     def choose_action(
         self, frames: list[FrameData], latest_frame: FrameData
@@ -136,7 +183,7 @@ class ARCAGIV3Solver(Agent):
         # ==============================================================
         # 1. OBSERVE
         # ==============================================================
-        screen = self.perception.extract_screen(latest_frame)
+        screen = self.perception.extract_screen(latest_frame, use_latest=True)
         levels_completed = getattr(latest_frame, "levels_completed", 0) or 0
 
         self.diagnostics.observe(
@@ -144,11 +191,39 @@ class ARCAGIV3Solver(Agent):
         )
 
         # Detect level advancement
-        if levels_completed != self.current_level_idx:
-            self.diagnostics.state(
-                f"Level transition detected: {self.current_level_idx} -> {levels_completed}"
-            )
-            self._init_level(levels_completed)
+        if levels_completed > self.current_level_idx:
+            if self.transition_phase == TransitionPhase.NORMAL:
+                self.diagnostics.state(
+                    f"Level completion observed: {self.current_level_idx} -> {levels_completed}. Entering transition synchronization."
+                )
+                self.transition_phase = TransitionPhase.WAITING_FOR_NEW_LEVEL_FRAME
+                if self.last_world_state and self.last_world_state.player:
+                    self.last_completed_goal_pos = self.last_world_state.player.grid_pos
+                if self.last_world_state and self.last_world_state.screen is not None:
+                    self.last_completed_screen = self.last_world_state.screen.copy()
+
+        # Handle transition synchronization
+        if self.transition_phase in (
+            TransitionPhase.WAITING_FOR_NEW_LEVEL_FRAME,
+            TransitionPhase.VERIFYING_NEW_FRAME,
+        ):
+            is_new = self._verify_new_level_frame(screen, levels_completed)
+            if is_new:
+                self.diagnostics.state(
+                    f"New level frame VERIFIED for Level {levels_completed + 1}. Initializing isolated WorldModel."
+                )
+                self.transition_phase = TransitionPhase.INITIALIZING_WORLD_MODEL
+                self._init_level(levels_completed)
+                self.transition_phase = TransitionPhase.NORMAL
+            else:
+                self.diagnostics.state(
+                    f"Stale completion frame detected for Level {self.current_level_idx + 1}. Holding transition state."
+                )
+                # Stale frame: DO NOT initialize world model from stale image.
+                # Send safe exploratory probe to trigger environment level advance
+                action = GameAction.ACTION1
+                self.last_action = action
+                return action
 
         prev_player = self.last_world_state.player if self.last_world_state else None
         player = self.perception.detect_player(screen, last_state=prev_player) if screen is not None else None
@@ -168,10 +243,16 @@ class ARCAGIV3Solver(Agent):
         )
 
         # ==============================================================
-        # 2. DISCOVER MECHANICS & OBSERVE RESULT (from previous action)
+        # 2. DISCOVER MECHANICS & OBSERVE RESULT (only within same level)
         # ==============================================================
         need_replan = False
-        if self.last_world_state is not None and self.last_action is not None and prev_player and player:
+        if (
+            self.last_world_state is not None
+            and self.last_world_state.level_idx == self.current_level_idx
+            and self.last_action is not None
+            and prev_player
+            and player
+        ):
             trans = self.transition_learner.observe_transition(
                 prev_world=self.last_world_state,
                 action=self.last_action,
@@ -194,6 +275,11 @@ class ARCAGIV3Solver(Agent):
             if abs(player.col - prev_player.col) > 1 or abs(player.row - prev_player.row) > 1:
                 self.diagnostics.model_update(f"Conveyor transport detected: {prev_player.grid_pos} -> {player.grid_pos}")
                 need_replan = True
+                if self.active_subgoal and self.active_subgoal.target_type == ObjectType.PUSHER:
+                    self.diagnostics.goal(
+                        f"Conveyor subgoal {self.active_subgoal.description} satisfied by transport to {player.grid_pos}"
+                    )
+                    self.active_subgoal = None
 
         # ==============================================================
         # 3. BUILD WORLD MODEL
@@ -242,10 +328,36 @@ class ARCAGIV3Solver(Agent):
                         self.diagnostics.plan(f"Dynamic fallback plan: {len(goal_actions)} actions to goal {curr_goal.grid_pos}")
 
         # ==============================================================
-        # 6. ACT
+        # 6. ACT & CONTROLLED RECOVERY (Phase 5)
         # ==============================================================
-        action = self.active_plan.popleft() if self.active_plan else GameAction.ACTION1
-        self.diagnostics.action(f"Selected action {action.name}")
+        if self.active_plan:
+            action = self.active_plan.popleft()
+            self.diagnostics.action(f"Selected action {action.name}")
+        else:
+            # Phase 5: Controlled Diagnostic Fallback & Recovery
+            self.diagnostics.action(
+                f"Warning: No plan active for player at {player.grid_pos if player else 'None'}."
+            )
+            # 1. Check whether dynamic collision obstacles are blocking the path
+            if self.world_model.dynamic_obstacles and player and self.active_subgoal:
+                self.diagnostics.plan("Attempting path recovery: clearing dynamic collision obstacles")
+                self.world_model.clear_dynamic_obstacles()
+                recovered_actions = self.planner.plan_sequence_to_target(
+                    start=player.grid_pos,
+                    target=self.active_subgoal.target_pos,
+                    count=self.active_subgoal.visit_count,
+                    cycle_delta=self.active_subgoal.cycle_delta,
+                )
+                if recovered_actions:
+                    self.active_plan.extend(recovered_actions)
+                    action = self.active_plan.popleft()
+                    self.diagnostics.plan(f"Recovery succeeded: {len(recovered_actions)} actions generated")
+                else:
+                    action = self._select_safe_fallback_action(player)
+            elif player:
+                action = self._select_safe_fallback_action(player)
+            else:
+                action = GameAction.ACTION1
 
         # Record in memory
         if player:

@@ -22,6 +22,7 @@ class WorldModel:
         self.grid: np.ndarray = np.full((rows, cols), ObjectType.UNKNOWN.value, dtype=object)
         # Sets of known object coordinates
         self.walls: Set[Tuple[int, int]] = set()
+        self.dynamic_obstacles: Set[Tuple[int, int]] = set()
         self.goals: Dict[Tuple[int, int], GoalSpecification] = {}
         self.refills: Set[Tuple[int, int]] = set()
         self.transformers: Dict[ObjectType, List[Tuple[int, int]]] = {
@@ -34,9 +35,10 @@ class WorldModel:
         self.hazard_cells: Set[Tuple[int, int]] = set()
 
     def reset_level(self) -> None:
-        """Reset internal map for a new level."""
+        """Reset internal map completely for a new level (100% isolated)."""
         self.grid.fill(ObjectType.UNKNOWN.value)
         self.walls.clear()
+        self.dynamic_obstacles.clear()
         self.goals.clear()
         self.refills.clear()
         for k in self.transformers:
@@ -45,6 +47,21 @@ class WorldModel:
         self.visited_cells.clear()
         self.hazard_cells.clear()
 
+    def clear_dynamic_obstacles(self) -> None:
+        """Remove learned temporary collision obstacles while keeping static walls."""
+        for pos in self.dynamic_obstacles:
+            self.walls.discard(pos)
+            if self.grid[pos[1], pos[0]] == ObjectType.WALL.value:
+                self.grid[pos[1], pos[0]] = ObjectType.EMPTY.value
+        self.dynamic_obstacles.clear()
+
+    def rebuild_from_perception(
+        self, objects: List[GameObject], player: Optional[PlayerState]
+    ) -> None:
+        """Completely rebuild level-local model from a fresh perception scan."""
+        self.reset_level()
+        self.update_from_perception(objects, player)
+
     def update_from_perception(
         self, objects: List[GameObject], player: Optional[PlayerState]
     ) -> None:
@@ -52,6 +69,7 @@ class WorldModel:
         if player:
             pos = player.grid_pos
             self.visited_cells.add(pos)
+            self.walls.discard(pos)
             if self.grid[pos[1], pos[0]] == ObjectType.UNKNOWN.value:
                 self.grid[pos[1], pos[0]] = ObjectType.EMPTY.value
 
@@ -70,10 +88,14 @@ class WorldModel:
                 if pos not in self.transformers[obj.object_type]:
                     self.transformers[obj.object_type].append(pos)
 
+        if player:
+            self.walls.discard(player.grid_pos)
+
     def mark_obstacle(self, col: int, row: int) -> None:
         """Dynamically mark a cell as an impassable obstacle."""
         if is_valid_grid_pos(col, row):
             self.walls.add((col, row))
+            self.dynamic_obstacles.add((col, row))
             self.grid[row, col] = ObjectType.WALL.value
 
     def is_passable(

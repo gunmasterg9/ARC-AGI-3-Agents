@@ -1,10 +1,21 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
 from .objects import GameObject
+
+
+class TransitionPhase(str, Enum):
+    """Generic transition state tracking to synchronize level handoffs."""
+
+    NORMAL = "NORMAL"
+    GOAL_COMPLETED = "GOAL_COMPLETED"
+    WAITING_FOR_NEW_LEVEL_FRAME = "WAITING_FOR_NEW_LEVEL_FRAME"
+    VERIFYING_NEW_FRAME = "VERIFYING_NEW_FRAME"
+    INITIALIZING_WORLD_MODEL = "INITIALIZING_WORLD_MODEL"
 
 
 @dataclass

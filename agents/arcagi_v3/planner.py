@@ -21,6 +21,45 @@ class Planner:
         self.world_model = world_model
         self.current_plan: Deque[GameAction] = deque()
 
+    def reset_level(self) -> None:
+        """Reset planner state for a new level."""
+        self.current_plan.clear()
+
+    def get_safe_recovery_action(
+        self,
+        current_pos: Tuple[int, int],
+        recent_positions: Optional[List[Tuple[int, int]]] = None,
+    ) -> GameAction:
+        """
+        Controlled recovery when no global path exists.
+        Selects a passable neighboring cell that avoids immediate collisions and recent loops.
+        """
+        recent = set(recent_positions or [])
+        passable_options: List[Tuple[GameAction, bool]] = []
+        for act, (dc, dr) in [
+            (GameAction.ACTION1, (0, -1)),
+            (GameAction.ACTION2, (0, 1)),
+            (GameAction.ACTION3, (-1, 0)),
+            (GameAction.ACTION4, (1, 0)),
+        ]:
+            nxt = (current_pos[0] + dc, current_pos[1] + dr)
+            if (
+                0 <= nxt[0] < self.world_model.cols
+                and 0 <= nxt[1] < self.world_model.rows
+                and nxt not in self.world_model.walls
+                and nxt not in self.world_model.hazard_cells
+            ):
+                is_fresh = nxt not in recent
+                passable_options.append((act, is_fresh))
+
+        # Prefer fresh unvisited neighbor over recently visited
+        for act, is_fresh in passable_options:
+            if is_fresh:
+                return act
+        if passable_options:
+            return passable_options[0][0]
+        return GameAction.ACTION1
+
     def find_grid_path(
         self,
         start: Tuple[int, int],

@@ -17,6 +17,7 @@ class ObjectType(Enum):
     REFILL = "refill"
     PUSHER = "pusher"
     MOVING_PLATFORM = "moving_platform"
+    WAYPOINT = "waypoint"
 
 
 @dataclass

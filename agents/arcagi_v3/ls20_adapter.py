@@ -106,8 +106,15 @@ LS20_LEVEL_SPECS: List[LevelDomainSpec] = [
             GoalSpecification(goal_id=0, col=1, row=1, req_shape=5, req_color=1, req_rot=0)
         ],
         mission_subgoals=[
+            MissionSubGoal(target_pos=(6, 4), target_type=ObjectType.PUSHER, visit_count=1, description="Ride conveyor at (6, 4) to (10, 4)"),
+            MissionSubGoal(target_pos=(10, 6), target_type=ObjectType.WAYPOINT, visit_count=1, description="Navigate corridor to (10, 6)"),
+            MissionSubGoal(target_pos=(8, 5), target_type=ObjectType.PUSHER, visit_count=1, description="Ride conveyor at (8, 5) to (6, 5)"),
             MissionSubGoal(target_pos=(6, 6), target_type=ObjectType.TRANSFORMER_COLOR, visit_count=3, cycle_delta=(0, -1), description="Cycle color 3 times"),
+            MissionSubGoal(target_pos=(6, 4), target_type=ObjectType.PUSHER, visit_count=1, description="Ride conveyor at (6, 4) to (10, 4)"),
+            MissionSubGoal(target_pos=(8, 4), target_type=ObjectType.PUSHER, visit_count=1, description="Ride conveyor at (8, 4) to (8, 9)"),
+            MissionSubGoal(target_pos=(4, 8), target_type=ObjectType.PUSHER, visit_count=1, description="Ride conveyor at (4, 8) to (1, 8)"),
             MissionSubGoal(target_pos=(4, 6), target_type=ObjectType.TRANSFORMER_SHAPE, visit_count=1, description="Transform shape to 5"),
+            MissionSubGoal(target_pos=(4, 8), target_type=ObjectType.PUSHER, visit_count=1, description="Ride conveyor at (4, 8) to (1, 8)"),
             MissionSubGoal(target_pos=(3, 3), target_type=ObjectType.REFILL, visit_count=1, description="Recharge steps"),
             MissionSubGoal(target_pos=(1, 1), target_type=ObjectType.GOAL, visit_count=1, description="Enter Level 4 Goal"),
         ],

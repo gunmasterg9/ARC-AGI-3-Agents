@@ -45,6 +45,12 @@ class TransitionLearner:
         # Learned pusher movements: (col, row) -> (dcol, drow)
         self.pusher_deltas: Dict[Tuple[int, int], Tuple[int, int]] = {}
 
+    def reset_level(self) -> None:
+        """Reset learned level-local transitions, cell effects, and pusher mechanics."""
+        self.transitions.clear()
+        self.cell_effects.clear()
+        self.pusher_deltas.clear()
+
     def observe_transition(
         self,
         prev_world: WorldState,
