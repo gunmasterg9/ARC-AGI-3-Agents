@@ -77,6 +77,7 @@ class Planner:
         start: Tuple[int, int],
         target: Tuple[int, int],
         count: int = 1,
+        cycle_delta: Optional[Tuple[int, int]] = None,
         blocked_cells: Optional[Set[Tuple[int, int]]] = None,
     ) -> List[GameAction]:
         """Plan path to target, stepping on it `count` times to trigger transformations."""
@@ -87,26 +88,29 @@ class Planner:
 
         actions.extend(self.path_to_actions(path))
 
-        # If multiple triggers needed, step to free adjacent neighbor and back
+        # If multiple triggers needed, step to neighbor and back
         if count > 1:
-            # Find free neighbor
-            free_neighbor = None
-            for dc, dr in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
-                nb = (target[0] + dc, target[1] + dr)
-                if (
-                    0 <= nb[0] < self.world_model.cols
-                    and 0 <= nb[1] < self.world_model.rows
-                    and nb not in self.world_model.walls
-                ):
-                    free_neighbor = nb
-                    break
+            act_out = None
+            act_back = None
+            if cycle_delta:
+                act_out = grid_delta_to_action(cycle_delta[0], cycle_delta[1])
+                act_back = grid_delta_to_action(-cycle_delta[0], -cycle_delta[1])
+            else:
+                # Find free neighbor
+                for dc, dr in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
+                    nb = (target[0] + dc, target[1] + dr)
+                    if (
+                        0 <= nb[0] < self.world_model.cols
+                        and 0 <= nb[1] < self.world_model.rows
+                        and nb not in self.world_model.walls
+                    ):
+                        act_out = grid_delta_to_action(dc, dr)
+                        act_back = grid_delta_to_action(-dc, -dr)
+                        break
 
-            if free_neighbor:
-                act_out = grid_delta_to_action(free_neighbor[0] - target[0], free_neighbor[1] - target[1])
-                act_back = grid_delta_to_action(target[0] - free_neighbor[0], target[1] - free_neighbor[1])
-                if act_out and act_back:
-                    for _ in range(count - 1):
-                        actions.append(act_out)
-                        actions.append(act_back)
+            if act_out and act_back:
+                for _ in range(count - 1):
+                    actions.append(act_out)
+                    actions.append(act_back)
 
         return actions

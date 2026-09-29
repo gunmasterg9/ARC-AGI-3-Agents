@@ -32,8 +32,8 @@ def test_v3_import_and_construction():
     """Test V3 agent import, inheritance, and attribute initialization."""
     solver = ARCAGIV3Solver()
     assert solver.MAX_ACTIONS == 500
-    assert solver.current_level_idx == 0
-    assert len(solver.active_plan) > 0
+    assert len(solver.active_plan) == 0  # V3.1: Zero pre-seeded actions
+    assert len(solver.subgoal_queue) > 0  # Semantic subgoals ready for dynamic planning
 
 
 @pytest.mark.unit

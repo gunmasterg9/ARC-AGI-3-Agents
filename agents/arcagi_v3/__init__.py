@@ -1,7 +1,7 @@
 from .agent import ARCAGIV3Solver, ArcagiV3Solver
 from .diagnostics import DiagnosticsLogger
 from .goals import GoalManager, GoalSpecification
-from .ls20_adapter import LevelDomainSpec, get_level_spec
+from .ls20_adapter import LevelDomainSpec, MissionSubGoal, get_level_spec
 from .memory import EpisodeMemory
 from .objects import GameObject, ObjectType
 from .perception import PerceptionEngine
@@ -29,5 +29,6 @@ __all__ = [
     "HUDState",
     "WorldState",
     "LevelDomainSpec",
+    "MissionSubGoal",
     "get_level_spec",
 ]
