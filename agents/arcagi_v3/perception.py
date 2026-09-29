@@ -1,0 +1,176 @@
+from __future__ import annotations
+
+import logging
+from typing import Any, List, Optional, Tuple
+import numpy as np
+from arcengine import FrameData
+
+from .actions import grid_to_pixel, pixel_to_grid
+from .objects import GameObject, ObjectType
+from .state import HUDState, PlayerState
+
+logger = logging.getLogger()
+
+COLORS = [12, 9, 14, 8]
+ROTATIONS = [0, 90, 180, 270]
+
+
+class PerceptionEngine:
+    """Robust observation processing and feature extraction for ARC-AGI-3."""
+
+    def __init__(self) -> None:
+        self.last_detected_player: Optional[PlayerState] = None
+
+    def extract_screen(self, frame_data: FrameData) -> Optional[np.ndarray]:
+        """Safely extract the 2D (64, 64) screen grid from FrameData."""
+        if frame_data is None:
+            return None
+        raw = getattr(frame_data, "frame", None)
+        if raw is None:
+            return None
+        try:
+            arr = np.asarray(raw)
+            while arr.ndim > 2:
+                arr = arr[0]
+            if arr.ndim == 2 and arr.shape == (64, 64):
+                return arr.astype(np.int32)
+        except Exception as e:
+            logger.debug(f"[PERCEPTION] Failed to extract screen array: {e}")
+        return None
+
+    def detect_player(
+        self, screen: np.ndarray, last_state: Optional[PlayerState] = None
+    ) -> Optional[PlayerState]:
+        """Detect the 5x5 player block on the grid."""
+        for c_top in COLORS:
+            for c_bot in COLORS:
+                if c_top == c_bot:
+                    continue
+                pos = self._search_player_pattern(screen, c_top, c_bot)
+                if pos is not None:
+                    x, y = pos
+                    col, row = pixel_to_grid(x, y)
+                    prev_shape = last_state.shape_idx if last_state else 0
+                    prev_color = last_state.color_idx if last_state else 0
+                    prev_rot = last_state.rot_idx if last_state else 0
+                    player = PlayerState(
+                        x=x,
+                        y=y,
+                        col=col,
+                        row=row,
+                        top_color=c_top,
+                        bottom_color=c_bot,
+                        shape_idx=prev_shape,
+                        color_idx=prev_color,
+                        rot_idx=prev_rot,
+                    )
+                    self.last_detected_player = player
+                    return player
+        return self.last_detected_player
+
+    def _search_player_pattern(
+        self, screen: np.ndarray, c_top: int, c_bot: int
+    ) -> Optional[Tuple[int, int]]:
+        """Search for a 5x5 block with top 2 rows = c_top, bottom 3 rows = c_bot."""
+        for row in range(11):
+            for col in range(11):
+                x, y = grid_to_pixel(col, row)
+                if x + 5 > 64 or y + 5 > 64:
+                    continue
+                if screen[y, x] != c_top:
+                    continue
+                top_ok = (
+                    np.all(screen[y, x : x + 5] == c_top)
+                    and np.all(screen[y + 1, x : x + 5] == c_top)
+                )
+                bot_ok = (
+                    np.all(screen[y + 2, x : x + 5] == c_bot)
+                    and np.all(screen[y + 3, x : x + 5] == c_bot)
+                    and np.all(screen[y + 4, x : x + 5] == c_bot)
+                )
+                if top_ok and bot_ok:
+                    return (x, y)
+        return None
+
+    def parse_hud(self, screen: np.ndarray, levels_completed: int = 0) -> HUDState:
+        """Parse status indicators (steps, lives, fog, target) from screen."""
+        hud = HUDState(levels_completed=levels_completed)
+        if screen is None or screen.shape != (64, 64):
+            return hud
+
+        # Check step counter bar at y=61..62, x=13..54
+        # Active steps are rendered with bright color (e.g. 10 or 14), depleted with 0 or 4
+        active_steps = 0
+        for col_idx in range(13, 55):
+            val = screen[61, col_idx]
+            if val not in (0, 4, -1, -2):
+                active_steps += 1
+        hud.remaining_steps = active_steps if active_steps > 0 else 42
+
+        # Check lives at y=61..62, x=56, 59, 62
+        lives = 0
+        for pip_x in [56, 59, 62]:
+            if pip_x < 64 and screen[61, pip_x] not in (0, 4, -1, -2):
+                lives += 1
+        hud.remaining_lives = lives if lives > 0 else 3
+
+        # Check if fog is present (large dark background area)
+        hud.has_fog = bool(np.sum(screen[10:40, 10:40] == 0) > 600 and levels_completed >= 6)
+
+        return hud
+
+    def detect_objects(
+        self, screen: np.ndarray, player: Optional[PlayerState] = None
+    ) -> List[GameObject]:
+        """Scan the 11x11 discrete grid cells and identify visible objects."""
+        objects: List[GameObject] = []
+        if screen is None:
+            return objects
+
+        player_grid = player.grid_pos if player else None
+
+        for row in range(11):
+            for col in range(11):
+                if player_grid == (col, row):
+                    continue
+
+                x, y = grid_to_pixel(col, row)
+                cell = screen[y : y + 5, x : x + 5]
+                unique_colors = set(np.unique(cell).tolist())
+
+                obj_type = ObjectType.EMPTY
+
+                # Wall / Obstacle check
+                if 4 in unique_colors:
+                    obj_type = ObjectType.WALL
+                # Goal check (color 5 border or fill)
+                elif 5 in unique_colors:
+                    obj_type = ObjectType.GOAL
+                # Refill item check (color 11)
+                elif 11 in unique_colors:
+                    obj_type = ObjectType.REFILL
+                # Rotation transformer (contains white pixels 1 and center pattern)
+                elif 1 in unique_colors and 0 in unique_colors and len(unique_colors) <= 3:
+                    # Could be rotation transformer or pusher
+                    obj_type = ObjectType.TRANSFORMER_ROTATION
+                # Color transformer (contains multiple palette colors 8, 9, 12, 14)
+                elif any(c in unique_colors for c in [8, 9, 12, 14]) and len(unique_colors) > 2:
+                    obj_type = ObjectType.TRANSFORMER_COLOR
+                # Shape transformer (contains shape outline)
+                elif len(unique_colors) == 2 and 0 in unique_colors and -2 in unique_colors:
+                    obj_type = ObjectType.TRANSFORMER_SHAPE
+
+                if obj_type != ObjectType.EMPTY:
+                    objects.append(
+                        GameObject(
+                            object_type=obj_type,
+                            x=x,
+                            y=y,
+                            col=col,
+                            row=row,
+                            width=5,
+                            height=5,
+                        )
+                    )
+
+        return objects

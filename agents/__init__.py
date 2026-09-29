@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 
 from .agent import Agent, Playback
 from .arcagi_solver import ARCAGI3Solver
+from .arcagi_v3 import ARCAGIV3Solver
 from .recorder import Recorder
 from .swarm import Swarm
 from .templates.langgraph_functional_agent import LangGraphFunc, LangGraphTextOnly
@@ -24,10 +25,16 @@ AVAILABLE_AGENTS: dict[str, Type[Agent]] = {
     if cls.__name__ != "Playback"
 }
 
-# Add the custom ARC-AGI-3 solver.
+# Add the custom ARC-AGI-3 solver (V2).
 AVAILABLE_AGENTS["arcagi3solver"] = ARCAGI3Solver
 AVAILABLE_AGENTS["arcagi_solver"] = ARCAGI3Solver
 AVAILABLE_AGENTS["arcagisolver"] = ARCAGI3Solver
+
+# Add the ARC-AGI-3 V3 general solver.
+AVAILABLE_AGENTS["arcagiv3"] = ARCAGIV3Solver
+AVAILABLE_AGENTS["arcagi_v3"] = ARCAGIV3Solver
+AVAILABLE_AGENTS["arcagi3_v3"] = ARCAGIV3Solver
+AVAILABLE_AGENTS["arcagiv3solver"] = ARCAGIV3Solver
 
 # Add all recording files as valid agent names.
 for rec in Recorder.list():
