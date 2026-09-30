@@ -151,3 +151,226 @@ def test_ls20_specs():
         assert spec is not None
         assert spec.level_idx == lvl
         assert len(spec.goals) >= 1
+
+
+# =====================================================================
+# V3.2 SPACE-TIME A* TEMPORAL PLANNER UNIT TESTS (1-15)
+# =====================================================================
+from agents.arcagi_v3.objects import GameObject
+from agents.arcagi_v3.temporal import MovingObjectModel, TemporalWorldModel
+
+
+@pytest.mark.unit
+def test_temporal_state():
+    """1. Test TemporalWorldModel initialization, clock progression, and active state."""
+    tm = TemporalWorldModel()
+    assert tm.current_time == 0
+    assert not tm.has_active_moving_objects()
+    tm.update_time(5)
+    assert tm.current_time == 5
+
+
+@pytest.mark.unit
+def test_moving_object_detection():
+    """2. Test online moving-object discovery from multi-frame displacement."""
+    tm = TemporalWorldModel()
+    obj0 = [GameObject(object_type=ObjectType.MOVING_PLATFORM, x=14, y=35, col=2, row=7)]
+    tm.update_from_detected_objects(obj0, t=0)
+    assert not tm.has_active_moving_objects()
+
+    obj1 = [GameObject(object_type=ObjectType.MOVING_PLATFORM, x=19, y=35, col=3, row=7)]
+    tm.update_from_detected_objects(obj1, t=1)
+    assert tm.has_active_moving_objects()
+    assert len(tm.moving_objects) == 1
+
+
+@pytest.mark.unit
+def test_velocity_estimation():
+    """3. Test velocity vector estimation from sequential positions."""
+    tm = TemporalWorldModel()
+    tm.update_from_detected_objects([GameObject(object_type=ObjectType.MOVING_PLATFORM, x=14, y=35, col=2, row=7)], t=0)
+    tm.update_from_detected_objects([GameObject(object_type=ObjectType.MOVING_PLATFORM, x=19, y=35, col=3, row=7)], t=1)
+    mover = list(tm.moving_objects.values())[0]
+    assert mover.velocity == (1, 0)
+
+
+
+@pytest.mark.unit
+def test_period_estimation():
+    """4. Test cyclic period estimation from repeated observation history."""
+    mover = MovingObjectModel(object_id="m1", current_pos=(2, 7))
+    positions = [(2, 7), (3, 7), (4, 7), (3, 7), (2, 7), (3, 7), (4, 7), (3, 7)]
+    for t, pos in enumerate(positions):
+        mover.update_observation(pos, t)
+    assert mover.is_periodic is True
+    assert mover.estimated_period == 4
+    assert mover.trajectory_cycle == [(2, 7), (3, 7), (4, 7), (3, 7)]
+
+
+@pytest.mark.unit
+def test_phase_estimation():
+    """5. Test cyclic phase index estimation within trajectory cycle."""
+    mover = MovingObjectModel(object_id="m1", current_pos=(2, 7))
+    positions = [(2, 7), (3, 7), (4, 7), (3, 7), (2, 7), (3, 7), (4, 7), (3, 7)]
+    for t, pos in enumerate(positions):
+        mover.update_observation(pos, t)
+    assert mover.estimated_phase == 3
+
+
+@pytest.mark.unit
+def test_future_position_prediction():
+    """6. Test future position prediction for periodic trajectories."""
+    mover = MovingObjectModel(object_id="m1", current_pos=(2, 7))
+    positions = [(2, 7), (3, 7), (4, 7), (3, 7), (2, 7), (3, 7), (4, 7), (3, 7)]
+    for t, pos in enumerate(positions):
+        mover.update_observation(pos, t)
+    assert mover.predict_position_at(8, current_t=7) == (2, 7)
+    assert mover.predict_position_at(9, current_t=7) == (3, 7)
+    assert mover.predict_position_at(10, current_t=7) == (4, 7)
+
+
+@pytest.mark.unit
+def test_collision_at_t_plus_1():
+    """7. Test immediate t+1 cell collision and vertex swap edge collision."""
+    tm = TemporalWorldModel()
+    tm.current_time = 0
+    mover = MovingObjectModel(object_id="m1", current_pos=(2, 7), velocity=(1, 0), confidence=0.8)
+    tm.moving_objects["m1"] = mover
+
+    # Extrapolates to (3, 7) at t=1
+    assert tm.is_temporally_blocked(3, 7, target_t=1, prev_pos=(4, 7)) is True
+    assert tm.is_temporally_blocked(0, 0, target_t=1) is False
+    # Vertex swap collision
+    assert tm.is_temporally_blocked(2, 7, target_t=1, prev_pos=(3, 7)) is True
+
+
+@pytest.mark.unit
+def test_collision_at_future_t():
+    """8. Test collision evaluation at arbitrary future time horizon t."""
+    tm = TemporalWorldModel()
+    tm.current_time = 0
+    mover = MovingObjectModel(
+        object_id="m1",
+        current_pos=(2, 7),
+        is_periodic=True,
+        estimated_period=2,
+        estimated_phase=0,
+        trajectory_cycle=[(2, 7), (3, 7)],
+        confidence=0.9,
+    )
+    tm.moving_objects["m1"] = mover
+
+    assert tm.is_temporally_blocked(3, 7, target_t=1) is True
+    assert tm.is_temporally_blocked(2, 7, target_t=2) is True
+    assert tm.is_temporally_blocked(3, 7, target_t=3) is True
+    assert tm.is_temporally_blocked(2, 7, target_t=3) is False
+
+
+@pytest.mark.unit
+def test_space_time_astar_path_generation():
+    """9. Test Space-Time A* generates collision-free path around dynamic mover."""
+    wm = WorldModel(cols=5, rows=5)
+    planner = Planner(wm)
+    tm = TemporalWorldModel()
+    mover = MovingObjectModel(
+        object_id="m1",
+        current_pos=(2, 2),
+        is_periodic=True,
+        estimated_period=2,
+        estimated_phase=0,
+        trajectory_cycle=[(2, 2), (2, 3)],
+        confidence=0.9,
+    )
+    tm.moving_objects["m1"] = mover
+
+    res = planner.find_space_time_path(start=(0, 2), target=(4, 2), start_t=0, temporal_model=tm)
+    assert res is not None
+    actions, coords = res
+    assert coords[0] == (0, 2)
+    assert coords[-1] == (4, 2)
+    for step_t, pos in enumerate(coords):
+        mover_pos = mover.predict_position_at(step_t, current_t=0)
+        assert pos != mover_pos
+
+
+@pytest.mark.unit
+def test_temporal_replanning():
+    """10. Test detection of imminent hazard triggers dynamic replanning."""
+    solver = ARCAGIV3Solver()
+    tm = solver.temporal_model
+    mover = MovingObjectModel(object_id="m1", current_pos=(6, 8), velocity=(0, -1), confidence=0.8)
+    tm.moving_objects["m1"] = mover
+    assert tm.is_temporally_blocked(6, 7, target_t=1) is True
+
+
+@pytest.mark.unit
+def test_prediction_mismatch_recovery():
+    """11. Test prediction verification failure dampens confidence and signals replan."""
+    tm = TemporalWorldModel()
+    mover = MovingObjectModel(
+        object_id="m1",
+        current_pos=(2, 7),
+        velocity=(1, 0),
+        confidence=0.8,
+        is_periodic=True,
+        estimated_period=2,
+        estimated_phase=0,
+        trajectory_cycle=[(2, 7), (3, 7)],
+    )
+    tm.moving_objects["m1"] = mover
+    tm.current_time = 0
+
+    observed = [GameObject(object_type=ObjectType.MOVING_PLATFORM, x=14, y=35, col=2, row=7)]
+    verified = tm.verify_prediction(observed, t=1)
+    assert verified is False
+    assert mover.confidence < 0.8
+
+
+@pytest.mark.unit
+def test_periodic_state_compression():
+    """12. Test periodic state space compression using LCM of periods."""
+    tm = TemporalWorldModel()
+    m1 = MovingObjectModel(object_id="m1", current_pos=(0, 0), is_periodic=True, estimated_period=4, confidence=0.8)
+    m2 = MovingObjectModel(object_id="m2", current_pos=(1, 1), is_periodic=True, estimated_period=6, confidence=0.8)
+    tm.moving_objects["m1"] = m1
+    tm.moving_objects["m2"] = m2
+    assert tm.compute_effective_period() == 12
+
+
+@pytest.mark.unit
+def test_no_illegal_wait_action():
+    """13. Test Space-Time A* only uses valid ARC-AGI-3 movement actions."""
+    wm = WorldModel(cols=5, rows=5)
+    planner = Planner(wm)
+    res = planner.find_space_time_path(start=(0, 0), target=(1, 0))
+    assert res is not None
+    actions, _ = res
+    legal = {GameAction.ACTION1, GameAction.ACTION2, GameAction.ACTION3, GameAction.ACTION4}
+    for a in actions:
+        assert a in legal
+
+
+@pytest.mark.unit
+def test_static_world_planner_regression():
+    """14. Test static world automatically uses BFS pathfinder without temporal overhead."""
+    wm = WorldModel(cols=5, rows=5)
+    planner = Planner(wm)
+    tm = TemporalWorldModel()
+    assert tm.has_active_moving_objects() is False
+    actions = planner.plan_sequence_to_target(start=(0, 0), target=(2, 0), temporal_model=tm)
+    assert actions == [GameAction.ACTION4, GameAction.ACTION4]
+
+
+@pytest.mark.unit
+def test_level_transition_temporal_reset():
+    """15. Test clean reset of all temporal tracking upon level transition."""
+    tm = TemporalWorldModel()
+    tm.update_time(42)
+    tm.moving_objects["m1"] = MovingObjectModel(object_id="m1", current_pos=(1, 1))
+    tm.prev_object_positions["p1"] = (1, 1)
+
+    tm.reset_level()
+    assert tm.current_time == 0
+    assert len(tm.moving_objects) == 0
+    assert len(tm.prev_object_positions) == 0
+

@@ -17,6 +17,7 @@ from .objects import GameObject, ObjectType
 from .perception import PerceptionEngine
 from .planner import Planner
 from .state import HUDState, PlayerState, TransitionPhase, WorldState
+from .temporal import TemporalWorldModel
 from .transitions import TransitionLearner
 from .world_model import WorldModel
 
@@ -75,6 +76,7 @@ class ARCAGIV3Solver(Agent):
         self.diagnostics = DiagnosticsLogger(prefix="[V3.1-SOLVER]", enabled=True)
         self.perception = PerceptionEngine()
         self.world_model = WorldModel(cols=11, rows=11)
+        self.temporal_model = TemporalWorldModel()
         self.transition_learner = TransitionLearner()
         self.goal_manager = GoalManager()
         self.planner = Planner(self.world_model)
@@ -101,6 +103,7 @@ class ARCAGIV3Solver(Agent):
         """Initialize world model, goals, and mission subgoals for a specific level with 100% isolation."""
         self.current_level_idx = level_idx
         self.world_model.reset_level()
+        self.temporal_model.reset_level()
         self.perception.reset_level()
         self.transition_learner.reset_level()
         self.memory.clear()
@@ -282,9 +285,30 @@ class ARCAGIV3Solver(Agent):
                     self.active_subgoal = None
 
         # ==============================================================
-        # 3. BUILD WORLD MODEL
+        # 3. BUILD WORLD MODEL & TEMPORAL TRACKING
         # ==============================================================
         self.world_model.update_from_perception(detected_objects, player)
+        self.temporal_model.update_from_detected_objects(detected_objects, t=self.action_counter)
+
+        # Online verification: check if predicted positions match observations
+        if not self.temporal_model.verify_prediction(detected_objects, t=self.action_counter):
+            self.diagnostics.plan("Moving obstacle prediction mismatch detected. Triggering dynamic replan.")
+            need_replan = True
+
+        # Check if currently queued action would collide with an oncoming moving obstacle
+        if self.active_plan and player and self.temporal_model.has_active_moving_objects():
+            from .actions import action_to_grid_delta
+            dc, dr = action_to_grid_delta(self.active_plan[0])
+            next_pos = (player.col + dc, player.row + dr)
+            target_cell = self.active_subgoal.target_pos if self.active_subgoal else None
+            if self.temporal_model.is_temporally_blocked(
+                next_pos[0], next_pos[1], target_t=self.action_counter + 1, prev_pos=player.grid_pos, target_cell=target_cell
+            ):
+                self.diagnostics.plan(
+                    f"Temporal obstacle collision predicted at {next_pos} on step {self.action_counter + 1}. Replanning!"
+                )
+                self.active_plan.clear()
+                need_replan = True
 
         if need_replan:
             self.diagnostics.plan("Clearing remaining plan to trigger dynamic replanning")
@@ -304,13 +328,15 @@ class ARCAGIV3Solver(Agent):
                 else:
                     self.active_subgoal = None
 
-            # Plan dynamic path to active subgoal
+            # Plan dynamic path to active subgoal using Space-Time A* when moving obstacles are active
             if self.active_subgoal:
                 new_actions = self.planner.plan_sequence_to_target(
                     start=player.grid_pos,
                     target=self.active_subgoal.target_pos,
                     count=self.active_subgoal.visit_count,
                     cycle_delta=self.active_subgoal.cycle_delta,
+                    temporal_model=self.temporal_model,
+                    start_t=self.action_counter,
                 )
                 self.active_plan.extend(new_actions)
                 self.diagnostics.plan(
@@ -321,11 +347,23 @@ class ARCAGIV3Solver(Agent):
             if not self.active_plan:
                 curr_goal = self.goal_manager.get_current_goal()
                 if curr_goal:
-                    goal_path = self.planner.find_grid_path(player.grid_pos, curr_goal.grid_pos)
-                    if goal_path:
-                        goal_actions = self.planner.path_to_actions(goal_path)
-                        self.active_plan.extend(goal_actions)
-                        self.diagnostics.plan(f"Dynamic fallback plan: {len(goal_actions)} actions to goal {curr_goal.grid_pos}")
+                    if self.temporal_model.has_active_moving_objects():
+                        st_res = self.planner.find_space_time_path(
+                            start=player.grid_pos,
+                            target=curr_goal.grid_pos,
+                            start_t=self.action_counter,
+                            temporal_model=self.temporal_model,
+                        )
+                        if st_res:
+                            goal_actions, _ = st_res
+                            self.active_plan.extend(goal_actions)
+                            self.diagnostics.plan(f"Space-time fallback plan: {len(goal_actions)} actions to goal {curr_goal.grid_pos}")
+                    if not self.active_plan:
+                        goal_path = self.planner.find_grid_path(player.grid_pos, curr_goal.grid_pos)
+                        if goal_path:
+                            goal_actions = self.planner.path_to_actions(goal_path)
+                            self.active_plan.extend(goal_actions)
+                            self.diagnostics.plan(f"Dynamic fallback plan: {len(goal_actions)} actions to goal {curr_goal.grid_pos}")
 
         # ==============================================================
         # 6. ACT & CONTROLLED RECOVERY (Phase 5)
