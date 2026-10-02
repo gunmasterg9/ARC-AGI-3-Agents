@@ -1,3 +1,11 @@
+from .action_semantics import (
+    ActionObservation,
+    ActionProbeEngine,
+    ActionSemanticClassifier,
+    ActionSemanticLabel,
+    ActionSemanticProfile,
+    ProbeSafety,
+)
 from .agent import ARCAGIV3Solver, ArcagiV3Solver
 from .diagnostics import DiagnosticsLogger
 from .goals import GoalManager, GoalSpecification
@@ -49,4 +57,10 @@ __all__ = [
     "TransferInterface",
     "NPCClassification",
     "ItemTransferState",
+    "ActionSemanticLabel",
+    "ProbeSafety",
+    "ActionObservation",
+    "ActionSemanticProfile",
+    "ActionSemanticClassifier",
+    "ActionProbeEngine",
 ]
