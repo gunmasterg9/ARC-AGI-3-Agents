@@ -18,6 +18,11 @@ class ObjectType(Enum):
     PUSHER = "pusher"
     MOVING_PLATFORM = "moving_platform"
     WAYPOINT = "waypoint"
+    ITEM = "item"
+    SWITCH = "switch"
+    RECEPTACLE = "receptacle"
+    INTERACTABLE = "interactable"
+    CONTROLLABLE = "controllable"
 
 
 @dataclass
@@ -42,3 +47,22 @@ class GameObject:
     @property
     def pixel_pos(self) -> Tuple[int, int]:
         return (self.x, self.y)
+
+
+@dataclass
+class Affordance:
+    """
+    Representation of an interactive capability associated with a target entity.
+    Discovered online from observed state changes when executing actions near objects.
+    """
+
+    target_object_id: str
+    target_pos: Tuple[int, int]
+    interaction_action: Any = None  # Typically GameAction.ACTION5
+    required_distance: int = 1  # 0: stand on top, 1: adjacent Manhattan neighbor
+    required_direction: Optional[Tuple[int, int]] = None
+    preconditions: Dict[str, Any] = field(default_factory=dict)
+    predicted_effect: str = "interact"
+    observed_effect: Optional[str] = None
+    confidence: float = 0.5
+

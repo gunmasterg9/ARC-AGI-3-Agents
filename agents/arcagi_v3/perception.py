@@ -77,33 +77,78 @@ class PerceptionEngine:
         return not np.array_equal(s1, s2)
 
     def detect_player(
-        self, screen: np.ndarray, last_state: Optional[PlayerState] = None
+        self,
+        screen: np.ndarray,
+        last_state: Optional[PlayerState] = None,
+        controllable_pos: Optional[Tuple[int, int]] = None,
+        stride: int = 5,
+        offset_x: int = 4,
+        offset_y: int = 0,
     ) -> Optional[PlayerState]:
-        """Detect the 5x5 player block on the grid."""
-        for c_top in COLORS:
-            for c_bot in COLORS:
-                if c_top == c_bot:
-                    continue
-                pos = self._search_player_pattern(screen, c_top, c_bot)
-                if pos is not None:
-                    x, y = pos
-                    col, row = pixel_to_grid(x, y)
-                    prev_shape = last_state.shape_idx if last_state else 0
-                    prev_color = last_state.color_idx if last_state else 0
-                    prev_rot = last_state.rot_idx if last_state else 0
-                    player = PlayerState(
-                        x=x,
-                        y=y,
-                        col=col,
-                        row=row,
-                        top_color=c_top,
-                        bottom_color=c_bot,
-                        shape_idx=prev_shape,
-                        color_idx=prev_color,
-                        rot_idx=prev_rot,
-                    )
-                    self.last_detected_player = player
-                    return player
+        """Detect the player avatar on the grid."""
+        # 1. First attempt LS20 pattern matching if on default stride
+        if stride == 5 and offset_x == 4:
+            for c_top in COLORS:
+                for c_bot in COLORS:
+                    if c_top == c_bot:
+                        continue
+                    pos = self._search_player_pattern(screen, c_top, c_bot)
+                    if pos is not None:
+                        x, y = pos
+                        col, row = pixel_to_grid(x, y, stride=5, offset_x=4)
+                        prev_shape = last_state.shape_idx if last_state else 0
+                        prev_color = last_state.color_idx if last_state else 0
+                        prev_rot = last_state.rot_idx if last_state else 0
+                        player = PlayerState(
+                            x=x,
+                            y=y,
+                            col=col,
+                            row=row,
+                            top_color=c_top,
+                            bottom_color=c_bot,
+                            shape_idx=prev_shape,
+                            color_idx=prev_color,
+                            rot_idx=prev_rot,
+                        )
+                        self.last_detected_player = player
+                        return player
+
+        # 2. Generalization: 4px WA30 avatar search (color 14 avatar block)
+        if stride == 4 and offset_x == 0:
+            for row in range(16):
+                for col in range(16):
+                    x = col * 4
+                    y = row * 4
+                    if x + 4 <= screen.shape[1] and y + 4 <= screen.shape[0]:
+                        cell = screen[y : y + 4, x : x + 4]
+                        if 14 in cell:
+                            player = PlayerState(
+                                x=x,
+                                y=y,
+                                col=col,
+                                row=row,
+                                top_color=0,
+                                bottom_color=14,
+                            )
+                            self.last_detected_player = player
+                            return player
+
+        # 3. Generalization fallback: use dynamically tracked controllable entity
+        if controllable_pos is not None:
+            col, row = controllable_pos
+            x = offset_x + col * stride
+            y = offset_y + row * stride
+            player = PlayerState(
+                x=x,
+                y=y,
+                col=col,
+                row=row,
+                top_color=12,
+                bottom_color=9,
+            )
+            self.last_detected_player = player
+            return player
+
         return self.last_detected_player
 
     def _search_player_pattern(
@@ -112,7 +157,7 @@ class PerceptionEngine:
         """Search for a 5x5 block with top 2 rows = c_top, bottom 3 rows = c_bot."""
         for row in range(11):
             for col in range(11):
-                x, y = grid_to_pixel(col, row)
+                x, y = grid_to_pixel(col, row, stride=5, offset_x=4)
                 if x + 5 > 64 or y + 5 > 64:
                     continue
                 if screen[y, x] != c_top:
@@ -158,57 +203,147 @@ class PerceptionEngine:
         return hud
 
     def detect_objects(
-        self, screen: np.ndarray, player: Optional[PlayerState] = None
+        self,
+        screen: np.ndarray,
+        player: Optional[PlayerState] = None,
+        stride: int = 5,
+        offset_x: int = 4,
+        offset_y: int = 0,
+        cols: int = 11,
+        rows: int = 11,
     ) -> List[GameObject]:
-        """Scan the 11x11 discrete grid cells and identify visible objects."""
+        """Scan discrete grid cells and identify visible objects."""
         objects: List[GameObject] = []
         if screen is None:
             return objects
 
         player_grid = player.grid_pos if player else None
 
-        for row in range(11):
-            for col in range(11):
+        # Standard verified LS20 detection path
+        if stride == 5 and cols == 11 and offset_x == 4:
+            for row in range(11):
+                for col in range(11):
+                    if player_grid == (col, row):
+                        continue
+
+                    x, y = grid_to_pixel(col, row, stride=5, offset_x=4)
+                    cell = screen[y : y + 5, x : x + 5]
+                    unique_colors = set(np.unique(cell).tolist())
+
+                    obj_type = ObjectType.EMPTY
+
+                    # Wall / Obstacle check
+                    if 4 in unique_colors:
+                        obj_type = ObjectType.WALL
+                    # Goal check (color 5 border or fill)
+                    elif 5 in unique_colors:
+                        obj_type = ObjectType.GOAL
+                    # Refill item check (color 11)
+                    elif 11 in unique_colors:
+                        obj_type = ObjectType.REFILL
+                    # Rotation transformer (contains white pixels 1 and center pattern)
+                    elif 1 in unique_colors and 0 in unique_colors and len(unique_colors) <= 3:
+                        # Could be rotation transformer or pusher
+                        obj_type = ObjectType.TRANSFORMER_ROTATION
+                    # Color transformer (contains multiple palette colors 8, 9, 12, 14)
+                    elif any(c in unique_colors for c in [8, 9, 12, 14]) and len(unique_colors) > 2:
+                        obj_type = ObjectType.TRANSFORMER_COLOR
+                    # Shape transformer (contains shape outline)
+                    elif len(unique_colors) == 2 and 0 in unique_colors and -2 in unique_colors:
+                        obj_type = ObjectType.TRANSFORMER_SHAPE
+
+                    if obj_type != ObjectType.EMPTY:
+                        objects.append(
+                            GameObject(
+                                object_type=obj_type,
+                                x=x,
+                                y=y,
+                                col=col,
+                                row=row,
+                                width=5,
+                                height=5,
+                            )
+                        )
+            return objects
+
+        # Dynamic generalized detection for non-LS20 environments (wa30, g50t, re86)
+        vals, counts = np.unique(screen, return_counts=True)
+        bg_color = vals[np.argmax(counts)]
+
+        for row in range(rows):
+            for col in range(cols):
                 if player_grid == (col, row):
                     continue
 
-                x, y = grid_to_pixel(col, row)
-                cell = screen[y : y + 5, x : x + 5]
-                unique_colors = set(np.unique(cell).tolist())
+                x = offset_x + col * stride
+                y = offset_y + row * stride
+                if x + stride > 64 or y + stride > 64:
+                    continue
+                cell = screen[y : y + stride, x : x + stride]
+                unique_colors = [c for c in np.unique(cell) if c != bg_color and c != -1 and c != 0]
+                if not unique_colors:
+                    continue
 
-                obj_type = ObjectType.EMPTY
-
-                # Wall / Obstacle check
-                if 4 in unique_colors:
-                    obj_type = ObjectType.WALL
-                # Goal check (color 5 border or fill)
-                elif 5 in unique_colors:
-                    obj_type = ObjectType.GOAL
-                # Refill item check (color 11)
-                elif 11 in unique_colors:
-                    obj_type = ObjectType.REFILL
-                # Rotation transformer (contains white pixels 1 and center pattern)
-                elif 1 in unique_colors and 0 in unique_colors and len(unique_colors) <= 3:
-                    # Could be rotation transformer or pusher
-                    obj_type = ObjectType.TRANSFORMER_ROTATION
-                # Color transformer (contains multiple palette colors 8, 9, 12, 14)
-                elif any(c in unique_colors for c in [8, 9, 12, 14]) and len(unique_colors) > 2:
-                    obj_type = ObjectType.TRANSFORMER_COLOR
-                # Shape transformer (contains shape outline)
-                elif len(unique_colors) == 2 and 0 in unique_colors and -2 in unique_colors:
-                    obj_type = ObjectType.TRANSFORMER_SHAPE
-
-                if obj_type != ObjectType.EMPTY:
+                # Bottom HUD bar (color 7) or out-of-bounds boundary -> WALL
+                if row == rows - 1 and (7 in unique_colors or y + stride >= 63):
                     objects.append(
                         GameObject(
-                            object_type=obj_type,
+                            object_type=ObjectType.WALL,
                             x=x,
                             y=y,
                             col=col,
                             row=row,
-                            width=5,
-                            height=5,
+                            width=stride,
+                            height=stride,
+                            color=7,
                         )
                     )
+                    continue
+
+                obj_type = ObjectType.UNKNOWN
+
+                # Structural & multi-color evidence
+                has_color_2 = (2 in unique_colors)
+                has_border_9 = (9 in unique_colors)
+                is_pure_flat_2 = (len(unique_colors) == 1 and unique_colors[0] == 2 and np.all(cell == 2))
+
+                # Check spatial neighborhood within screen for border color 9
+                neighbor_has_9 = False
+                for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                    ny, nx = y + dr * stride, x + dc * stride
+                    if 0 <= ny < screen.shape[0] and 0 <= nx < screen.shape[1]:
+                        if 9 in screen[ny : ny + stride, nx : nx + stride]:
+                            neighbor_has_9 = True
+                            break
+
+                if has_color_2 and (has_border_9 or (is_pure_flat_2 and neighbor_has_9)):
+                    # Flat bounded receptacle (e.g. jigtxgzhwt, doijajrgdi, ktghqrydvd)
+                    obj_type = ObjectType.RECEPTACLE
+                elif is_pure_flat_2:
+                    # Secondary large flat drop zone
+                    obj_type = ObjectType.RECEPTACLE
+                elif has_color_2 and not has_border_9 and not is_pure_flat_2:
+                    # Textured stippled obstacle block (e.g. pmargquscu containing 2 mixed with texture)
+                    obj_type = ObjectType.WALL
+                elif len(unique_colors) == 1 and np.all(cell == unique_colors[0]):
+                    # Solid uniform foreground block -> WALL
+                    obj_type = ObjectType.WALL
+                else:
+                    # Multi-colored foreground item (e.g. border 4, center 9)
+                    obj_type = ObjectType.ITEM
+
+                objects.append(
+                    GameObject(
+                        object_type=obj_type,
+                        x=x,
+                        y=y,
+                        col=col,
+                        row=row,
+                        width=stride,
+                        height=stride,
+                        color=unique_colors[0] if unique_colors else None,
+                    )
+                )
 
         return objects
+

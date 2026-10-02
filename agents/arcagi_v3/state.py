@@ -80,3 +80,5 @@ class WorldState:
     detected_objects: List[GameObject] = field(default_factory=list)
     screen: Optional[np.ndarray] = None
     completed_goals: List[int] = field(default_factory=list)
+    carried_object_id: Optional[str] = None
+    controlled_entity_id: Optional[str] = None

@@ -12,6 +12,26 @@ logger = logging.getLogger()
 
 
 @dataclass
+class TransientObstacle:
+    """Represents a temporary dynamic blocked cell caused by a moving entity or dynamic collision."""
+
+    position: Tuple[int, int]
+    source_id: Optional[str] = None
+    observed_step: int = 0
+    confidence: float = 1.0
+    ttl: int = 3
+    expiration_step: int = 3
+
+    @property
+    def col(self) -> int:
+        return self.position[0]
+
+    @property
+    def row(self) -> int:
+        return self.position[1]
+
+
+@dataclass
 class MovingObjectModel:
     """
     Representation of a moving obstacle or dynamic entity learned online from observations.
@@ -86,7 +106,13 @@ class MovingObjectModel:
             self.trajectory_cycle = []
             self.confidence = 0.3 if (self.velocity[0] != 0 or self.velocity[1] != 0) else 0.1
 
-    def predict_position_at(self, target_t: int, current_t: Optional[int] = None) -> Tuple[int, int]:
+    def predict_position_at(
+        self,
+        target_t: int,
+        current_t: Optional[int] = None,
+        grid_cols: int = 16,
+        grid_rows: int = 16,
+    ) -> Tuple[int, int]:
         """
         Predict the object's grid position at future time step target_t.
         Uses periodic cycle if known and confident, otherwise linear extrapolation or last position.
@@ -104,11 +130,13 @@ class MovingObjectModel:
             return self.trajectory_cycle[idx]
 
         # Linear extrapolation with bounds damping if velocity is non-zero
-        if self.velocity != (0, 0) and self.confidence >= 0.5:
+        if self.velocity != (0, 0) and (self.confidence >= 0.25 or len(self.history) >= 2):
             pred_col = self.current_pos[0] + self.velocity[0] * dt
             pred_row = self.current_pos[1] + self.velocity[1] * dt
-            # Clamp to grid bounds (0..10)
-            return (max(0, min(10, pred_col)), max(0, min(10, pred_row)))
+            # Clamp to grid bounds (at least 15 for 16x16 grid, e.g. WA30)
+            max_c = max(10, grid_cols - 1)
+            max_r = max(10, grid_rows - 1)
+            return (max(0, min(max_c, pred_col)), max(0, min(max_r, pred_row)))
 
         # Default fallback
         return self.current_pos
@@ -128,12 +156,81 @@ class TemporalWorldModel:
         self.current_time: int = 0
         self.moving_objects: Dict[str, MovingObjectModel] = {}
         self.prev_object_positions: Dict[str, Tuple[int, int]] = {}
+        self.transient_obstacles: Dict[Tuple[int, int], TransientObstacle] = {}
+
+    def estimate_cell_vacancy(
+        self,
+        col: int,
+        row: int,
+        start_t: int,
+        max_k: int = 4,
+    ) -> Optional[int]:
+        """
+        Estimate when (in how many time steps k in 1..max_k) the given cell will become vacant.
+        Returns the earliest k where is_temporally_blocked is False, or None if it remains blocked.
+        """
+        for k in range(1, max_k + 1):
+            t = start_t + k
+            if not self.is_temporally_blocked(col, row, target_t=t):
+                return k
+        return None
 
     def reset_level(self) -> None:
         """Reset temporal state for clean level isolation."""
         self.current_time = 0
         self.moving_objects.clear()
         self.prev_object_positions.clear()
+        self.transient_obstacles.clear()
+
+    def add_transient_obstacle(
+        self,
+        position: Tuple[int, int],
+        source_id: Optional[str] = None,
+        t: int = 0,
+        ttl: int = 3,
+        confidence: float = 1.0,
+    ) -> TransientObstacle:
+        """Register a temporary blocked cell with expiration TTL."""
+        obs = TransientObstacle(
+            position=position,
+            source_id=source_id,
+            observed_step=t,
+            confidence=confidence,
+            ttl=ttl,
+            expiration_step=t + ttl,
+        )
+        self.transient_obstacles[position] = obs
+        logger.debug(
+            f"[TEMPORAL] Added transient obstacle at {position} (source={source_id}, TTL={ttl}, expires={t+ttl})"
+        )
+        return obs
+
+    def update_transient_obstacles(
+        self,
+        current_t: int,
+        moving_positions: Optional[Set[Tuple[int, int]]] = None,
+    ) -> None:
+        """Prune expired transient obstacles or those whose source entity has moved away."""
+        self.current_time = current_t
+        to_remove = []
+        for pos, obs in self.transient_obstacles.items():
+            # 1. Expire based on TTL
+            if current_t >= obs.expiration_step:
+                to_remove.append(pos)
+                continue
+            # 2. If source entity is known and has moved to a different cell
+            if obs.source_id and obs.source_id in self.moving_objects:
+                mover = self.moving_objects[obs.source_id]
+                if mover.current_pos != pos:
+                    to_remove.append(pos)
+                    continue
+            # 3. If moving positions set is provided and this cell is now vacated
+            if moving_positions is not None and pos not in moving_positions and obs.confidence < 0.95:
+                if current_t > obs.observed_step:
+                    to_remove.append(pos)
+        for pos in to_remove:
+            logger.debug(f"[TEMPORAL] Pruned transient obstacle at {pos}")
+            del self.transient_obstacles[pos]
 
     def update_time(self, t: int) -> None:
         """Advance internal discrete clock."""
@@ -151,25 +248,25 @@ class TemporalWorldModel:
         self.current_time = t
         current_seen: Dict[str, Tuple[int, int]] = {}
 
-        # Filter candidate moving entities (moving platforms, transformers on tracks)
+        # Filter candidate moving entities (moving platforms, unknown objects)
         for obj in detected_objects:
             if obj.object_type in (
                 ObjectType.MOVING_PLATFORM,
-                ObjectType.TRANSFORMER_ROTATION,
-                ObjectType.TRANSFORMER_COLOR,
-                ObjectType.TRANSFORMER_SHAPE,
+                ObjectType.UNKNOWN,
             ):
                 pos = (obj.col, obj.row)
                 obj_id = f"{obj.object_type.value}_{pos[0]}_{pos[1]}"
                 current_seen[obj_id] = pos
 
+        occupied_current = set(current_seen.values())
+
         # Check motion against previous frame positions
         for obj_id, pos in current_seen.items():
-            base_type = obj_id.split("_")[0]
+            base_type = obj_id.rsplit("_", 2)[0]
             # Try to match with an existing moving object of the same type within 1 cell Manhattan distance
             matched_key: Optional[str] = None
             for existing_id, mover in self.moving_objects.items():
-                if mover.object_type.value.startswith(base_type):
+                if mover.object_type.value == base_type:
                     dist = abs(mover.current_pos[0] - pos[0]) + abs(mover.current_pos[1] - pos[1])
                     if dist <= 1:
                         matched_key = existing_id
@@ -180,7 +277,11 @@ class TemporalWorldModel:
             else:
                 # Check if this object moved from a previous position
                 for prev_id, prev_pos in self.prev_object_positions.items():
-                    if prev_id.split("_")[0] == base_type:
+                    # If previous position is still occupied in the current frame, it did not vacate/move
+                    if prev_pos in occupied_current:
+                        continue
+                    prev_type = prev_id.rsplit("_", 2)[0]
+                    if prev_type == base_type:
                         dist = abs(prev_pos[0] - pos[0]) + abs(prev_pos[1] - pos[1])
                         if dist == 1 and prev_pos != pos:
                             # Confirmed movement! Register as a moving object
@@ -208,8 +309,8 @@ class TemporalWorldModel:
         self.prev_object_positions = current_seen
 
     def has_active_moving_objects(self) -> bool:
-        """Return True if at least one moving object is actively tracked."""
-        return len(self.moving_objects) > 0
+        """Return True if at least one moving obstacle that blocks player is actively tracked."""
+        return any(mover.blocks_player for mover in self.moving_objects.values())
 
     def compute_effective_period(self) -> Optional[int]:
         """
@@ -239,9 +340,18 @@ class TemporalWorldModel:
         target_cell: Optional[Tuple[int, int]] = None,
     ) -> bool:
         """
-        Check whether the target grid cell at target_t is blocked by any predicted moving obstacle.
+        Check whether the target grid cell at target_t is blocked by any predicted moving obstacle
+        or active transient obstacle.
         Also detects vertex swap (edge collision) with an oncoming obstacle.
         """
+        pos = (col, row)
+        # Check active transient obstacles
+        if pos in self.transient_obstacles:
+            obs = self.transient_obstacles[pos]
+            if target_t < obs.expiration_step:
+                if target_cell is None or pos != target_cell:
+                    return True
+
         curr_t = self.current_time
         for mover in self.moving_objects.values():
             if not mover.blocks_player:

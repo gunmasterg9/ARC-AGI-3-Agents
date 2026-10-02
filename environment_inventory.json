@@ -1,0 +1,429 @@
+[
+  {
+    "game_id": "ar25",
+    "full_id": "ar25-0c556536",
+    "title": "AR25",
+    "version": "0c556536",
+    "class_name": "Ar25",
+    "win_levels": 8,
+    "tags": [
+      "keyboard_click"
+    ],
+    "local_dir": "C:\\Users\\GAUTAM\\arc-agi-3\\environment_files\\ar25\\0c556536",
+    "status": "OK",
+    "error": null,
+    "has_recording": false,
+    "recordings": []
+  },
+  {
+    "game_id": "bp35",
+    "full_id": "bp35-0a0ad940",
+    "title": "BP35",
+    "version": "0a0ad940",
+    "class_name": "Bp35",
+    "win_levels": 9,
+    "tags": [
+      "keyboard_click"
+    ],
+    "local_dir": "C:\\Users\\GAUTAM\\arc-agi-3\\environment_files\\bp35\\0a0ad940",
+    "status": "OK",
+    "error": null,
+    "has_recording": false,
+    "recordings": []
+  },
+  {
+    "game_id": "cd82",
+    "full_id": "cd82-fb555c5d",
+    "title": "CD82",
+    "version": "fb555c5d",
+    "class_name": "Cd82",
+    "win_levels": 6,
+    "tags": [
+      "keyboard_click"
+    ],
+    "local_dir": "C:\\Users\\GAUTAM\\arc-agi-3\\environment_files\\cd82\\fb555c5d",
+    "status": "OK",
+    "error": null,
+    "has_recording": false,
+    "recordings": []
+  },
+  {
+    "game_id": "cn04",
+    "full_id": "cn04-2fe56bfb",
+    "title": "CN04",
+    "version": "2fe56bfb",
+    "class_name": "Cn04",
+    "win_levels": 6,
+    "tags": [
+      "keyboard_click"
+    ],
+    "local_dir": "C:\\Users\\GAUTAM\\arc-agi-3\\environment_files\\cn04\\2fe56bfb",
+    "status": "OK",
+    "error": null,
+    "has_recording": false,
+    "recordings": []
+  },
+  {
+    "game_id": "dc22",
+    "full_id": "dc22-fdcac232",
+    "title": "DC22",
+    "version": "fdcac232",
+    "class_name": "Dc22",
+    "win_levels": 6,
+    "tags": [
+      "keyboard_click"
+    ],
+    "local_dir": "C:\\Users\\GAUTAM\\arc-agi-3\\environment_files\\dc22\\fdcac232",
+    "status": "OK",
+    "error": null,
+    "has_recording": false,
+    "recordings": []
+  },
+  {
+    "game_id": "ft09",
+    "full_id": "ft09-0d8bbf25",
+    "title": "FT09",
+    "version": "0d8bbf25",
+    "class_name": "Ft09",
+    "win_levels": 6,
+    "tags": [],
+    "local_dir": "C:\\Users\\GAUTAM\\arc-agi-3\\environment_files\\ft09\\0d8bbf25",
+    "status": "OK",
+    "error": null,
+    "has_recording": false,
+    "recordings": []
+  },
+  {
+    "game_id": "g50t",
+    "full_id": "g50t-5849a774",
+    "title": "G50T",
+    "version": "5849a774",
+    "class_name": "G50t",
+    "win_levels": 7,
+    "tags": [
+      "keyboard"
+    ],
+    "local_dir": "C:\\Users\\GAUTAM\\arc-agi-3\\environment_files\\g50t\\5849a774",
+    "status": "OK",
+    "error": null,
+    "has_recording": false,
+    "recordings": []
+  },
+  {
+    "game_id": "ka59",
+    "full_id": "ka59-38d34dbb",
+    "title": "KA59",
+    "version": "38d34dbb",
+    "class_name": "Ka59",
+    "win_levels": 7,
+    "tags": [
+      "keyboard_click"
+    ],
+    "local_dir": "C:\\Users\\GAUTAM\\arc-agi-3\\environment_files\\ka59\\38d34dbb",
+    "status": "OK",
+    "error": null,
+    "has_recording": false,
+    "recordings": []
+  },
+  {
+    "game_id": "lf52",
+    "full_id": "lf52-271a04aa",
+    "title": "LF52",
+    "version": "271a04aa",
+    "class_name": "Lf52",
+    "win_levels": 10,
+    "tags": [
+      "click"
+    ],
+    "local_dir": "C:\\Users\\GAUTAM\\arc-agi-3\\environment_files\\lf52\\271a04aa",
+    "status": "OK",
+    "error": null,
+    "has_recording": false,
+    "recordings": []
+  },
+  {
+    "game_id": "lp85",
+    "full_id": "lp85-305b61c3",
+    "title": "LP85",
+    "version": "305b61c3",
+    "class_name": "Lp85",
+    "win_levels": 8,
+    "tags": [
+      "click"
+    ],
+    "local_dir": "C:\\Users\\GAUTAM\\arc-agi-3\\environment_files\\lp85\\305b61c3",
+    "status": "OK",
+    "error": null,
+    "has_recording": false,
+    "recordings": []
+  },
+  {
+    "game_id": "ls20",
+    "full_id": "ls20-9607627b",
+    "title": "LS20",
+    "version": "9607627b",
+    "class_name": "Ls20",
+    "win_levels": 7,
+    "tags": [
+      "keyboard"
+    ],
+    "local_dir": "C:\\Users\\GAUTAM\\arc-agi-3\\environment_files\\ls20\\9607627b",
+    "status": "OK",
+    "error": null,
+    "has_recording": true,
+    "recordings": [
+      "ls20-9607627b.arcagi3solver.09490301-9e77-49d1-a9bb-fda8d1d9446a.recording.jsonl",
+      "ls20-9607627b.arcagi3solver.18e20abc-acc7-46c5-8e7e-62b02d5d43e8.recording.jsonl",
+      "ls20-9607627b.arcagi3solver.191a2a9f-bd8c-4f14-af0e-cc683ab5ffdc.recording.jsonl",
+      "ls20-9607627b.arcagi3solver.2a6927bd-8606-4290-9b0f-96a80be65d34.recording.jsonl",
+      "ls20-9607627b.arcagi3solver.3a0068ca-4194-4cf4-a978-08f185e7f84e.recording.jsonl",
+      "ls20-9607627b.arcagi3solver.4d7f8222-77fa-4e62-9372-c72caab25ba1.recording.jsonl",
+      "ls20-9607627b.arcagi3solver.4f3ec6e4-226f-4874-8345-82c96c0d286b.recording.jsonl",
+      "ls20-9607627b.arcagi3solver.5f64ae5f-906e-442b-a1f5-f364c066f849.recording.jsonl",
+      "ls20-9607627b.arcagi3solver.66f89d65-a8bf-4748-8f70-a414fc10dd32.recording.jsonl",
+      "ls20-9607627b.arcagi3solver.78865335-78d7-4060-94e5-25c63775f574.recording.jsonl",
+      "ls20-9607627b.arcagi3solver.7dcb998b-419f-48bb-8836-89d2ab08b1a1.recording.jsonl",
+      "ls20-9607627b.arcagi3solver.8c1c966c-c5b3-4bbc-8b0e-8e16b352498c.recording.jsonl",
+      "ls20-9607627b.arcagi3solver.90548f44-9deb-4d09-8743-3b4dc1b1af33.recording.jsonl",
+      "ls20-9607627b.arcagi3solver.9c3fc3f9-3d36-4fcb-aae0-373f190f2ea1.recording.jsonl",
+      "ls20-9607627b.arcagi3solver.9ea14a15-4e5b-4ca1-b674-9ab1283d4dd7.recording.jsonl",
+      "ls20-9607627b.arcagi3solver.af963ffd-6d86-41aa-a715-9b62c514a8d0.recording.jsonl",
+      "ls20-9607627b.arcagi3solver.cb7f55ad-17b8-4304-8d66-966a473e0b61.recording.jsonl",
+      "ls20-9607627b.arcagi3solver.cd47f322-09d3-4ea0-a5f3-765b693b4f38.recording.jsonl",
+      "ls20-9607627b.arcagi3solver.cee8b3ac-d49c-460e-abd0-c1870c18b875.recording.jsonl",
+      "ls20-9607627b.arcagi3solver.d1530be3-f5d8-4776-be66-ec12232c5250.recording.jsonl",
+      "ls20-9607627b.arcagi3solver.d481c896-1742-4c01-a635-057d47aa98c1.recording.jsonl",
+      "ls20-9607627b.arcagi3solver.e00ad5ef-c826-4409-ac32-0cd42bd6e7b4.recording.jsonl",
+      "ls20-9607627b.arcagi3solver.e5d3c2d2-7d8f-4569-81f7-c43dff4f3de6.recording.jsonl",
+      "ls20-9607627b.arcagi3solver.e710713d-745e-434c-94c2-e504f53524f0.recording.jsonl",
+      "ls20-9607627b.arcagi3solver.ef663400-f070-43e5-8ccb-cc3ce243a007.recording.jsonl",
+      "ls20-9607627b.arcagi3solver.f3877e5a-1121-468b-8177-680186ecb989.recording.jsonl",
+      "ls20-9607627b.arcagiv3solver.c2cc9bb5-04e0-4a95-8396-ace15610dd18.recording.jsonl",
+      "ls20-9607627b.random.80.28f48315-a2e6-40d4-bdf2-88b2a8c236f1.recording.jsonl"
+    ]
+  },
+  {
+    "game_id": "m0r0",
+    "full_id": "m0r0-492f87ba",
+    "title": "M0R0",
+    "version": "492f87ba",
+    "class_name": "M0r0",
+    "win_levels": 6,
+    "tags": [
+      "keyboard_click"
+    ],
+    "local_dir": "C:\\Users\\GAUTAM\\arc-agi-3\\environment_files\\m0r0\\492f87ba",
+    "status": "OK",
+    "error": null,
+    "has_recording": false,
+    "recordings": []
+  },
+  {
+    "game_id": "r11l",
+    "full_id": "r11l-495a7899",
+    "title": "R11L",
+    "version": "495a7899",
+    "class_name": "R11l",
+    "win_levels": 6,
+    "tags": [
+      "click"
+    ],
+    "local_dir": "C:\\Users\\GAUTAM\\arc-agi-3\\environment_files\\r11l\\495a7899",
+    "status": "OK",
+    "error": null,
+    "has_recording": false,
+    "recordings": []
+  },
+  {
+    "game_id": "re86",
+    "full_id": "re86-8af5384d",
+    "title": "RE86",
+    "version": "8af5384d",
+    "class_name": "Re86",
+    "win_levels": 8,
+    "tags": [
+      "keyboard_click"
+    ],
+    "local_dir": "C:\\Users\\GAUTAM\\arc-agi-3\\environment_files\\re86\\8af5384d",
+    "status": "OK",
+    "error": null,
+    "has_recording": false,
+    "recordings": []
+  },
+  {
+    "game_id": "s5i5",
+    "full_id": "s5i5-18d95033",
+    "title": "S5I5",
+    "version": "18d95033",
+    "class_name": "S5i5",
+    "win_levels": 8,
+    "tags": [
+      "click"
+    ],
+    "local_dir": "C:\\Users\\GAUTAM\\arc-agi-3\\environment_files\\s5i5\\18d95033",
+    "status": "OK",
+    "error": null,
+    "has_recording": false,
+    "recordings": []
+  },
+  {
+    "game_id": "sb26",
+    "full_id": "sb26-7fbdac44",
+    "title": "SB26",
+    "version": "7fbdac44",
+    "class_name": "Sb26",
+    "win_levels": 8,
+    "tags": [
+      "keyboard_click"
+    ],
+    "local_dir": "C:\\Users\\GAUTAM\\arc-agi-3\\environment_files\\sb26\\7fbdac44",
+    "status": "OK",
+    "error": null,
+    "has_recording": false,
+    "recordings": []
+  },
+  {
+    "game_id": "sc25",
+    "full_id": "sc25-635fd71a",
+    "title": "SC25",
+    "version": "635fd71a",
+    "class_name": "Sc25",
+    "win_levels": 6,
+    "tags": [
+      "keyboard_click"
+    ],
+    "local_dir": "C:\\Users\\GAUTAM\\arc-agi-3\\environment_files\\sc25\\635fd71a",
+    "status": "OK",
+    "error": null,
+    "has_recording": false,
+    "recordings": []
+  },
+  {
+    "game_id": "sk48",
+    "full_id": "sk48-d8078629",
+    "title": "SK48",
+    "version": "d8078629",
+    "class_name": "Sk48",
+    "win_levels": 8,
+    "tags": [
+      "keyboard_click"
+    ],
+    "local_dir": "C:\\Users\\GAUTAM\\arc-agi-3\\environment_files\\sk48\\d8078629",
+    "status": "OK",
+    "error": null,
+    "has_recording": false,
+    "recordings": []
+  },
+  {
+    "game_id": "sp80",
+    "full_id": "sp80-589a99af",
+    "title": "SP80",
+    "version": "589a99af",
+    "class_name": "Sp80",
+    "win_levels": 6,
+    "tags": [
+      "keyboard_click"
+    ],
+    "local_dir": "C:\\Users\\GAUTAM\\arc-agi-3\\environment_files\\sp80\\589a99af",
+    "status": "OK",
+    "error": null,
+    "has_recording": false,
+    "recordings": []
+  },
+  {
+    "game_id": "su15",
+    "full_id": "su15-1944f8ab",
+    "title": "SU15",
+    "version": "1944f8ab",
+    "class_name": "Su15",
+    "win_levels": 9,
+    "tags": [
+      "click"
+    ],
+    "local_dir": "C:\\Users\\GAUTAM\\arc-agi-3\\environment_files\\su15\\1944f8ab",
+    "status": "OK",
+    "error": null,
+    "has_recording": false,
+    "recordings": []
+  },
+  {
+    "game_id": "tn36",
+    "full_id": "tn36-ef4dde99",
+    "title": "TN36",
+    "version": "ef4dde99",
+    "class_name": "Tn36",
+    "win_levels": 7,
+    "tags": [
+      "click"
+    ],
+    "local_dir": "C:\\Users\\GAUTAM\\arc-agi-3\\environment_files\\tn36\\ef4dde99",
+    "status": "OK",
+    "error": null,
+    "has_recording": false,
+    "recordings": []
+  },
+  {
+    "game_id": "tr87",
+    "full_id": "tr87-cd924810",
+    "title": "TR87",
+    "version": "cd924810",
+    "class_name": "Tr87",
+    "win_levels": 6,
+    "tags": [
+      "keyboard"
+    ],
+    "local_dir": "C:\\Users\\GAUTAM\\arc-agi-3\\environment_files\\tr87\\cd924810",
+    "status": "OK",
+    "error": null,
+    "has_recording": false,
+    "recordings": []
+  },
+  {
+    "game_id": "tu93",
+    "full_id": "tu93-0768757b",
+    "title": "TU93",
+    "version": "0768757b",
+    "class_name": "Tu93",
+    "win_levels": 9,
+    "tags": [
+      "keyboard_click"
+    ],
+    "local_dir": "C:\\Users\\GAUTAM\\arc-agi-3\\environment_files\\tu93\\0768757b",
+    "status": "OK",
+    "error": null,
+    "has_recording": false,
+    "recordings": []
+  },
+  {
+    "game_id": "vc33",
+    "full_id": "vc33-5430563c",
+    "title": "VC33",
+    "version": "5430563c",
+    "class_name": "Vc33",
+    "win_levels": 7,
+    "tags": [
+      "click"
+    ],
+    "local_dir": "C:\\Users\\GAUTAM\\arc-agi-3\\environment_files\\vc33\\5430563c",
+    "status": "OK",
+    "error": null,
+    "has_recording": false,
+    "recordings": []
+  },
+  {
+    "game_id": "wa30",
+    "full_id": "wa30-ee6fef47",
+    "title": "WA30",
+    "version": "ee6fef47",
+    "class_name": "Wa30",
+    "win_levels": 9,
+    "tags": [
+      "keyboard"
+    ],
+    "local_dir": "C:\\Users\\GAUTAM\\arc-agi-3\\environment_files\\wa30\\ee6fef47",
+    "status": "OK",
+    "error": null,
+    "has_recording": false,
+    "recordings": []
+  }
+]

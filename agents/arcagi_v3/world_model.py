@@ -15,9 +15,12 @@ logger = logging.getLogger()
 class WorldModel:
     """Internal spatial and semantic model of the environment."""
 
-    def __init__(self, cols: int = 11, rows: int = 11) -> None:
+    def __init__(self, cols: int = 11, rows: int = 11, stride: int = 5, offset_x: int = 4, offset_y: int = 0) -> None:
         self.cols = cols
         self.rows = rows
+        self.stride = stride
+        self.offset_x = offset_x
+        self.offset_y = offset_y
         # Grid stores known ObjectType per cell
         self.grid: np.ndarray = np.full((rows, cols), ObjectType.UNKNOWN.value, dtype=object)
         # Sets of known object coordinates
@@ -25,6 +28,10 @@ class WorldModel:
         self.dynamic_obstacles: Set[Tuple[int, int]] = set()
         self.goals: Dict[Tuple[int, int], GoalSpecification] = {}
         self.refills: Set[Tuple[int, int]] = set()
+        self.items: Set[Tuple[int, int]] = set()
+        self.receptacles: Set[Tuple[int, int]] = set()
+        self.switches: Set[Tuple[int, int]] = set()
+        self.carried_object_id: Optional[str] = None
         self.transformers: Dict[ObjectType, List[Tuple[int, int]]] = {
             ObjectType.TRANSFORMER_ROTATION: [],
             ObjectType.TRANSFORMER_COLOR: [],
@@ -34,6 +41,17 @@ class WorldModel:
         self.visited_cells: Set[Tuple[int, int]] = set()
         self.hazard_cells: Set[Tuple[int, int]] = set()
 
+    def configure_grid(self, cols: int, rows: int, stride: int, offset_x: int = 0, offset_y: int = 0) -> None:
+        """Dynamically reconfigure grid bounds and stride when new grid dimensions are inferred."""
+        if cols != self.cols or rows != self.rows or stride != self.stride:
+            self.cols = cols
+            self.rows = rows
+            self.stride = stride
+            self.offset_x = offset_x
+            self.offset_y = offset_y
+            self.grid = np.full((rows, cols), ObjectType.UNKNOWN.value, dtype=object)
+            logger.debug(f"[WORLD_MODEL] Reconfigured grid to {cols}x{rows}, stride={stride}px")
+
     def reset_level(self) -> None:
         """Reset internal map completely for a new level (100% isolated)."""
         self.grid.fill(ObjectType.UNKNOWN.value)
@@ -41,6 +59,10 @@ class WorldModel:
         self.dynamic_obstacles.clear()
         self.goals.clear()
         self.refills.clear()
+        self.items.clear()
+        self.receptacles.clear()
+        self.switches.clear()
+        self.carried_object_id = None
         for k in self.transformers:
             self.transformers[k].clear()
         self.pushers.clear()
@@ -70,12 +92,13 @@ class WorldModel:
             pos = player.grid_pos
             self.visited_cells.add(pos)
             self.walls.discard(pos)
-            if self.grid[pos[1], pos[0]] == ObjectType.UNKNOWN.value:
-                self.grid[pos[1], pos[0]] = ObjectType.EMPTY.value
+            if 0 <= pos[0] < self.cols and 0 <= pos[1] < self.rows:
+                if self.grid[pos[1], pos[0]] == ObjectType.UNKNOWN.value:
+                    self.grid[pos[1], pos[0]] = ObjectType.EMPTY.value
 
         for obj in objects:
             pos = (obj.col, obj.row)
-            if not is_valid_grid_pos(obj.col, obj.row):
+            if not is_valid_grid_pos(obj.col, obj.row, cols=self.cols, rows=self.rows):
                 continue
 
             self.grid[obj.row, obj.col] = obj.object_type.value
@@ -84,6 +107,12 @@ class WorldModel:
                 self.walls.add(pos)
             elif obj.object_type == ObjectType.REFILL:
                 self.refills.add(pos)
+            elif obj.object_type == ObjectType.ITEM:
+                self.items.add(pos)
+            elif obj.object_type == ObjectType.RECEPTACLE:
+                self.receptacles.add(pos)
+            elif obj.object_type == ObjectType.SWITCH:
+                self.switches.add(pos)
             elif obj.object_type in self.transformers:
                 if pos not in self.transformers[obj.object_type]:
                     self.transformers[obj.object_type].append(pos)
@@ -93,7 +122,7 @@ class WorldModel:
 
     def mark_obstacle(self, col: int, row: int) -> None:
         """Dynamically mark a cell as an impassable obstacle."""
-        if is_valid_grid_pos(col, row):
+        if is_valid_grid_pos(col, row, cols=self.cols, rows=self.rows):
             self.walls.add((col, row))
             self.dynamic_obstacles.add((col, row))
             self.grid[row, col] = ObjectType.WALL.value
@@ -106,7 +135,7 @@ class WorldModel:
         target_goal: Optional[GoalSpecification] = None,
     ) -> bool:
         """Determine whether a discrete grid cell is passable for the player."""
-        if not is_valid_grid_pos(col, row):
+        if not is_valid_grid_pos(col, row, cols=self.cols, rows=self.rows):
             return False
 
         pos = (col, row)
@@ -125,3 +154,4 @@ class WorldModel:
             return False
 
         return True
+

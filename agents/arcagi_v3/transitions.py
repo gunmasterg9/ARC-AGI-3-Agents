@@ -22,6 +22,11 @@ class ActionEffect:
     shape_changed: bool = False
     color_changed: bool = False
     rotation_changed: bool = False
+    carried_changed: bool = False
+    carried_object_id: Optional[str] = None
+    active_entity_changed: bool = False
+    interacted_object_id: Optional[str] = None
+    interaction_type: Optional[str] = None
 
 
 @dataclass
@@ -77,12 +82,45 @@ class TransitionLearner:
             dcol = next_p.col - prev_p.col
             drow = next_p.row - prev_p.row
             moved = (dcol != 0 or drow != 0)
-            blocked = (not moved) and (not level_adv) and (not reset)
+            if action == GameAction.ACTION5:
+                # ACTION5 does not displace spatial position unless observed
+                blocked = False
+            else:
+                blocked = (not moved) and (not level_adv) and (not reset)
 
         # Check property changes on player
         rot_changed = bool(prev_p and next_p and prev_p.rot_idx != next_p.rot_idx)
         col_changed = bool(prev_p and next_p and prev_p.color_idx != next_p.color_idx)
         shp_changed = bool(prev_p and next_p and prev_p.shape_idx != next_p.shape_idx)
+
+        # Interaction effects for ACTION5 or object state transitions
+        carried_changed = False
+        carried_obj_id = None
+        active_ent_changed = False
+        interaction_type = None
+
+        prev_carried = getattr(prev_world, "carried_object_id", None)
+        next_carried = getattr(next_world, "carried_object_id", None)
+        if prev_carried != next_carried:
+            carried_changed = True
+            carried_obj_id = next_carried
+            interaction_type = "pickup" if next_carried is not None else "drop"
+
+        prev_ctrl = getattr(prev_world, "controlled_entity_id", None)
+        next_ctrl = getattr(next_world, "controlled_entity_id", None)
+        if prev_ctrl is not None and next_ctrl is not None and prev_ctrl != next_ctrl:
+            active_ent_changed = True
+            interaction_type = "switch_focus"
+
+        if action == GameAction.ACTION5 and not interaction_type:
+            if len(next_world.detected_objects) < len(prev_world.detected_objects):
+                carried_changed = True
+                interaction_type = "pickup"
+            elif len(next_world.detected_objects) > len(prev_world.detected_objects):
+                carried_changed = True
+                interaction_type = "drop"
+            else:
+                interaction_type = "interact"
 
         stepped_on = None
         if next_p:
@@ -110,6 +148,10 @@ class TransitionLearner:
             shape_changed=shp_changed,
             color_changed=col_changed,
             rotation_changed=rot_changed,
+            carried_changed=carried_changed,
+            carried_object_id=carried_obj_id,
+            active_entity_changed=active_ent_changed,
+            interaction_type=interaction_type,
         )
 
         trans = Transition(
